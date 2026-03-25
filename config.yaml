@@ -1,0 +1,70 @@
+# 双色球智能预测系统 - 运行时配置
+
+data:
+  # 数据源: web | csv
+  source: "web"
+  # 网络爬取 URL (福彩官网 API)
+  web_url: "https://www.cwl.gov.cn/cwl_admin/front/cwlkj/search/kjxx/findDrawNotice"
+  # CSV 文件路径
+  csv_path: "data/raw/history.csv"
+  # SQLite 数据库路径
+  db_path: "data/lottery.db"
+
+analysis:
+  # 默认分析最近期数
+  default_recent: 100
+  # 冷热号窗口期数
+  hot_window: 10
+  # 冷号阈值
+  cold_threshold: 5
+
+features:
+  # 滑动窗口大小列表
+  window_sizes: [5, 10, 20, 50]
+  # LSTM 序列长度
+  sequence_length: 30
+
+models:
+  statistical:
+    enabled: true
+    weight: 0.2
+  random_forest:
+    enabled: true
+    weight: 0.25
+    n_estimators: 200
+  xgboost:
+    enabled: true
+    weight: 0.3
+    max_depth: 6
+    n_estimators: 300
+  lstm:
+    enabled: true
+    weight: 0.25
+    hidden_size: 128
+    num_layers: 2
+    epochs: 100
+    learning_rate: 0.001
+
+ensemble:
+  # 融合策略: weighted_voting | stacking
+  strategy: "weighted_voting"
+
+filters:
+  # 是否启用概率排除过滤器
+  enabled: true
+  # 最大连号长度阈值（超过此值的组合被排除）
+  max_consecutive: 4
+  # 重复检查最近期数
+  repeat_check_recent: 10
+  # 和值区间百分位（排除超出此区间的组合）
+  sum_range_percentile: 95
+  # 排除全奇/全偶组合
+  exclude_extreme_odd_even: true
+  # 排除单区全出组合
+  exclude_single_zone: true
+
+output:
+  # 图表输出目录
+  charts_dir: "output/charts"
+  # matplotlib 风格
+  chart_style: "seaborn-v0_8"

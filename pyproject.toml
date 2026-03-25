@@ -1,0 +1,60 @@
+[project]
+name = "lottery-predictor"
+version = "0.1.0"
+description = "双色球智能预测系统 - 综合统计分析、机器学习、深度学习多策略融合"
+requires-python = ">=3.10"
+dependencies = [
+    "pandas>=2.1",
+    "numpy>=1.26",
+    "requests>=2.31",
+    "beautifulsoup4>=4.12",
+    "lxml>=5.0",
+    "matplotlib>=3.8",
+    "seaborn>=0.13",
+    "scikit-learn>=1.4",
+    "click>=8.1",
+    "pyyaml>=6.0",
+    "loguru>=0.7",
+    "tqdm>=4.66",
+]
+
+[project.optional-dependencies]
+ml = [
+    "xgboost>=2.0",
+]
+dl = [
+    "torch>=2.2",
+]
+all = [
+    "xgboost>=2.0",
+    "torch>=2.2",
+]
+dev = [
+    "pytest>=8.0",
+    "pytest-cov>=4.1",
+    "mypy>=1.8",
+    "ruff>=0.2",
+]
+
+[project.scripts]
+lottery = "lottery.cli:cli"
+
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.ruff]
+target-version = "py310"
+line-length = 100
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+
+[tool.mypy]
+python_version = "3.10"
+warn_return_any = true
+warn_unused_configs = true
