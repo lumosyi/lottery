@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from copy import deepcopy
 from collections import Counter
 
 import numpy as np
@@ -71,17 +72,31 @@ class FilterPipeline:
 
         for pred in predictions:
             ok, reasons = self.check(pred.red_balls, pred.blue_ball, records)
+            details = deepcopy(pred.details)
             if ok:
-                passed.append(pred)
+                passed.append(
+                    Prediction(
+                        red_balls=pred.red_balls,
+                        blue_ball=pred.blue_ball,
+                        score=pred.score,
+                        source=pred.source,
+                        details=details,
+                    )
+                )
             else:
                 excluded_count += 1
                 excluded_reasons.extend(reasons)
-                # 在 details 中标注但仍保留（标记为被过滤）
-                pred.details["filtered"] = True
-                pred.details["filter_reasons"] = reasons
-                pred.confidence *= 0.3  # 大幅降低置信度
-                pred.source = f"{pred.source}[已排除]"
-                passed.append(pred)
+                details["filtered"] = True
+                details["filter_reasons"] = reasons
+                passed.append(
+                    Prediction(
+                        red_balls=pred.red_balls,
+                        blue_ball=pred.blue_ball,
+                        score=pred.score,
+                        source=pred.source,
+                        details=details,
+                    )
+                )
 
         # 统计
         reason_counter = Counter(
@@ -148,9 +163,9 @@ class FilterPipeline:
 
         # 3. 和值范围过滤
         sums = [sum(r.red_balls) for r in records]
-        lower = 100 - sum_percentile
+        lower = (100 - sum_percentile) / 2
         min_sum = int(np.percentile(sums, lower))
-        max_sum = int(np.percentile(sums, sum_percentile))
+        max_sum = int(np.percentile(sums, 100 - lower))
         filters.append(SumRangeFilter(min_sum=min_sum, max_sum=max_sum))
 
         # 4. 奇偶极端过滤

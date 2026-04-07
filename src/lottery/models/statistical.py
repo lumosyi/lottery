@@ -7,7 +7,6 @@
 from __future__ import annotations
 
 import random
-from collections import Counter
 
 from loguru import logger
 
@@ -70,15 +69,15 @@ class StatisticalPredictor(BasePredictor):
             # 按概率加权采样 1 个蓝球
             blue_ball = random.choices(ALL_BLUE_BALLS, weights=blue_probs, k=1)[0]
 
-            # 置信度基于所选号码的平均概率
+            # 评分基于所选号码的平均概率
             avg_prob = sum(red_probs[ALL_RED_BALLS.index(b)] for b in red_balls) / RED_BALL_COUNT
-            confidence = min(avg_prob * 10, 0.95)  # 归一化到合理范围
+            score = min(avg_prob * 10, 0.95)  # 归一化到合理范围
 
             predictions.append(
                 Prediction(
                     red_balls=tuple(sorted(red_balls)),
                     blue_ball=blue_ball,
-                    confidence=round(confidence, 3),
+                    score=round(score, 3),
                     source=self.name,
                 )
             )
@@ -139,4 +138,3 @@ class StatisticalPredictor(BasePredictor):
 
         total_score = sum(combined)
         return [s / total_score for s in combined]
-

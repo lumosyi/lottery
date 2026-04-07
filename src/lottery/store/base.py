@@ -22,7 +22,7 @@ class DataStore(Protocol):
         ...
 
     def load_recent(self, count: int) -> list[LotteryRecord]:
-        """加载最近 N 期记录（按期号降序）"""
+        """加载最近 N 期记录（按期号升序）"""
         ...
 
     def load_by_range(self, start_issue: str, end_issue: str) -> list[LotteryRecord]:

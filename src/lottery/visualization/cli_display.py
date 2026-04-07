@@ -57,12 +57,13 @@ class CliDisplay:
     @staticmethod
     def print_prediction_table(predictions: list[Prediction]) -> None:
         """表格形式展示多组预测"""
-        click.echo(f"\n{'序号':<4} {'来源':<12} {'红球':^25} {'蓝球':>4} {'置信度':>8}")
-        click.echo("-" * 60)
+        click.echo(f"\n{'序号':<4} {'来源':<16} {'状态':<6} {'红球':^25} {'蓝球':>4} {'评分':>8}")
+        click.echo("-" * 74)
         for i, p in enumerate(predictions, 1):
             red_str = " ".join(f"{b:02d}" for b in p.red_balls)
+            status = "已标记" if p.details.get("filtered") else "-"
             click.echo(
-                f"{i:<4} {p.source:<12} {red_str:^25} {p.blue_ball:02d} {p.confidence:>7.1%}"
+                f"{i:<4} {p.source:<16} {status:<6} {red_str:^25} {p.blue_ball:02d} {p.score:>7.1%}"
             )
 
 
@@ -203,10 +204,6 @@ def _print_pattern(result: AnalysisResult) -> None:
             items.append(f"{length}连: {cnt}次({cnt/total:.1%})")
     click.echo(f"    分布: {' | '.join(items)}")
 
-    # 排除建议
-    threshold = min(cons["max_length"] + 1, 5)
-    click.echo(f"    -> 建议: 排除 {threshold} 连号及以上组合")
-
     # 重复开奖统计
     rep = data["repeat"]
     click.echo(f"\n  重复开奖统计:")
@@ -225,7 +222,6 @@ def _print_pattern(result: AnalysisResult) -> None:
     click.echo(f"\n  和值范围:")
     click.echo(f"    最小: {sr['min']}  最大: {sr['max']}  平均: {sr['mean']}")
     click.echo(f"    95%区间: [{sr['p2_5']}, {sr['p97_5']}]")
-    click.echo(f"    -> 建议: 排除和值 < {sr['p2_5']} 或 > {sr['p97_5']} 的组合")
 
     # 奇偶极端
     oe = data["odd_even_extreme"]

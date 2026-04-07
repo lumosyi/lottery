@@ -65,9 +65,9 @@ class HotColdAnalyzer(BaseAnalyzer):
     ) -> dict[str, list[int]]:
         """将号码分类为热/温/冷
 
-        基于相对分位数:
-        - 热号: 出现次数 > 平均值（偏高区间）
-        - 冷号: 出现次数 = 0 或低于平均值的一半
+        分类规则:
+        - 热号: 出现次数 >= 平均值 + 1
+        - 冷号: 出现次数 <= cold_threshold
         - 温号: 介于两者之间
         """
         all_balls = ALL_RED_BALLS if ball_type == "red" else ALL_BLUE_BALLS
@@ -83,16 +83,17 @@ class HotColdAnalyzer(BaseAnalyzer):
         counts = [counter.get(b, 0) for b in all_balls]
         avg = sum(counts) / len(counts) if counts else 0
 
-        # 按出现次数排名分段: 前1/3热号，后1/3冷号，中间温号
-        ball_counts = [(b, counter.get(b, 0)) for b in all_balls]
-        ball_counts.sort(key=lambda x: x[1], reverse=True)
+        hot: list[int] = []
+        warm: list[int] = []
+        cold: list[int] = []
 
-        n = len(ball_counts)
-        hot_cutoff = n // 3
-        cold_cutoff = 2 * n // 3
-
-        hot: list[int] = [b for b, _ in ball_counts[:hot_cutoff]]
-        warm: list[int] = [b for b, _ in ball_counts[hot_cutoff:cold_cutoff]]
-        cold: list[int] = [b for b, _ in ball_counts[cold_cutoff:]]
+        for ball in all_balls:
+            count = counter.get(ball, 0)
+            if count >= avg + 1:
+                hot.append(ball)
+            elif count <= self._cold_threshold:
+                cold.append(ball)
+            else:
+                warm.append(ball)
 
         return {"hot": hot, "warm": warm, "cold": cold, "counts": dict(counter)}

@@ -41,9 +41,36 @@ class FeatureBuilder:
     """
 
     def __init__(self, window_sizes: list[int] | None = None) -> None:
-        self._window_sizes = window_sizes or [5, 10, 20, 50]
+        self._window_sizes = sorted(window_sizes or [5, 10, 20, 50])
         # 训练时记录的有效窗口，确保预测时特征一致
         self._effective_windows: list[int] | None = None
+
+    @property
+    def window_sizes(self) -> list[int]:
+        """当前配置的窗口列表。"""
+        return list(self._window_sizes)
+
+    @property
+    def effective_windows(self) -> list[int] | None:
+        """训练后生效的窗口列表。"""
+        if self._effective_windows is None:
+            return None
+        return list(self._effective_windows)
+
+    def snapshot(self) -> dict[str, list[int] | None]:
+        """导出特征构建器状态，便于持久化。"""
+        return {
+            "window_sizes": self.window_sizes,
+            "effective_windows": self.effective_windows,
+        }
+
+    @classmethod
+    def from_snapshot(cls, snapshot: dict[str, list[int] | None]) -> "FeatureBuilder":
+        """从持久化状态恢复构建器。"""
+        builder = cls(window_sizes=snapshot.get("window_sizes"))
+        effective_windows = snapshot.get("effective_windows")
+        builder._effective_windows = list(effective_windows) if effective_windows else None
+        return builder
 
     def _get_effective_windows(self, data_size: int) -> list[int]:
         """根据数据量计算有效窗口"""

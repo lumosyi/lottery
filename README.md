@@ -24,11 +24,14 @@ python -m venv .venv
 # macOS/Linux:
 source .venv/bin/activate
 
-# 安装项目（基础依赖，含统计分析 + 随机森林 + XGBoost）
+# 安装项目（基础依赖，含统计分析 + 随机森林）
 pip install -e .
 
-# 安装 LSTM 深度学习支持（可选，约 200MB）
-pip install torch --index-url https://download.pytorch.org/whl/cpu
+# 安装 XGBoost 支持（可选）
+pip install -e .[ml]
+
+# 安装 LSTM 深度学习支持（可选）
+pip install -e .[dl]
 ```
 
 ## 快速开始
@@ -45,6 +48,9 @@ lottery analyze
 
 # 4. 生成预测号码（全模型融合）
 lottery predict --ensemble
+
+# 5. 回测最近 100 期，和随机基线比较
+lottery backtest --model statistical --holdout 100
 ```
 
 ## 命令详解
@@ -157,6 +163,10 @@ lottery predict --model rf --model xgboost --ensemble --sets 3
 lottery predict --ensemble --no-filter --sets 5
 ```
 
+当使用 `--model all` 时，如果某些模型因依赖缺失或历史数据不足无法运行，CLI 会自动跳过并继续执行剩余模型；如果你显式指定了某个模型，则会直接报错，避免误以为该模型已经参与预测。
+
+CLI 会优先输出去重后的唯一号码组；当模型原始结果存在重复组合时，会自动扩展候选并尽量补足唯一推荐。
+
 **可用模型**：
 
 | 模型 | 名称 | 说明 |
@@ -182,7 +192,39 @@ lottery predict --ensemble --no-filter --sets 5
 | 奇偶过滤 | 全奇(6:0)或全偶(0:6) | 各约 1%，概率极低 |
 | 三区过滤 | 全落单区(6:0:0) | 仅 3 次(0.15%) |
 
-被排除的组合不会被丢弃，而是**降低置信度并标注原因**，用户可自行判断。使用 `--no-filter` 关闭过滤。
+被标记的组合不会被丢弃，而是保留原始评分并附加标记原因，用户可自行判断。使用 `--no-filter` 关闭过滤。
+
+### `lottery backtest` — 回测最近若干期
+
+使用 walk-forward 方式评估最近若干期的表现，并与随机基线比较。
+
+```bash
+# 回测最近 100 期
+lottery backtest --model statistical --holdout 100
+
+# 每 5 期采样一次，适合长区间快速评估
+lottery backtest --model statistical --holdout 300 --step 5
+
+# 至少积累 50 期历史后再开始评估
+lottery backtest --model statistical --holdout 100 --min-history 50
+
+# 同时评估融合结果
+lottery backtest --model all --ensemble --holdout 50
+
+# 导出 JSON 报告
+lottery backtest --model statistical --holdout 100 --output output/backtest/report --format json
+
+# 导出 CSV 明细（会生成 summary/cases 两个文件）
+lottery backtest --model statistical --holdout 100 --output output/backtest/report.csv --format csv
+```
+
+导出说明：
+
+- `step`：按固定步长抽样回测，适合快速比较模型，能显著减少长区间回测耗时。
+- `min-history`：要求至少有足够历史数据后才开始评估，避免前期样本太少导致结果失真。
+- 若所选模型需要更长历史窗，回测会自动把最小历史期数提升到模型要求，并在终端和导出元数据中说明。
+- `json`：输出单个文件，包含 `metrics`、`baseline`、`cases` 和本次回测参数。
+- `csv`：输出 `*.summary.csv` 和 `*.cases.csv` 两个文件，便于后续做表格分析。
 
 ## 配置文件
 
@@ -218,6 +260,9 @@ models:
 
 ensemble:
   strategy: "weighted_voting"
+
+runtime:
+  seed: 42
 ```
 
 ## 项目结构

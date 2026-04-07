@@ -49,6 +49,17 @@ class CsvFetcher(BaseFetcher):
         "blue_ball": "blue_ball",
         "蓝球1": "blue_ball",
     }
+    _REQUIRED_COLUMNS = {
+        "issue",
+        "draw_date",
+        "red_1",
+        "red_2",
+        "red_3",
+        "red_4",
+        "red_5",
+        "red_6",
+        "blue_ball",
+    }
 
     def __init__(self, file_path: str | Path) -> None:
         self._file_path = Path(file_path)
@@ -89,6 +100,9 @@ class CsvFetcher(BaseFetcher):
 
             # 映射列名
             col_map = self._resolve_columns(reader.fieldnames)
+            missing = sorted(self._REQUIRED_COLUMNS - set(col_map.values()))
+            if missing:
+                raise ValueError(f"CSV 缺少必要列: {', '.join(missing)}")
 
             for line_num, row in enumerate(reader, start=2):
                 try:

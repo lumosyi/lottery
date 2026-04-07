@@ -8,11 +8,11 @@ from __future__ import annotations
 
 import pickle
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 from loguru import logger
 from tqdm import tqdm
-from xgboost import XGBClassifier
 
 from lottery.constants import ALL_BLUE_BALLS, ALL_RED_BALLS, RED_BALL_COUNT
 from lottery.features.builder import FeatureBuilder
@@ -20,6 +20,14 @@ from lottery.models.base import BasePredictor
 from lottery.models.registry import PredictorRegistry
 from lottery.types import LotteryRecord, Prediction
 from lottery.utils import weighted_sample_no_replace
+
+try:
+    from xgboost import XGBClassifier
+
+    XGBOOST_AVAILABLE = True
+except ImportError:
+    XGBClassifier = None
+    XGBOOST_AVAILABLE = False
 
 
 @PredictorRegistry.register("xgboost")
@@ -37,14 +45,17 @@ class XGBoostPredictor(BasePredictor):
         feature_builder: FeatureBuilder | None = None,
         random_state: int = 42,
     ) -> None:
+        if not XGBOOST_AVAILABLE:
+            raise ImportError("XGBoost 未安装。请运行: pip install -e .[ml]")
         self._n_estimators = n_estimators
         self._max_depth = max_depth
         self._learning_rate = learning_rate
         self._feature_builder = feature_builder or FeatureBuilder()
         self._random_state = random_state
-        self._red_models: dict[int, XGBClassifier] = {}
-        self._blue_models: dict[int, XGBClassifier] = {}
+        self._red_models: dict[int, Any] = {}
+        self._blue_models: dict[int, Any] = {}
         self._trained = False
+        self._feature_names: list[str] = []
 
     @property
     def name(self) -> str:
@@ -55,6 +66,7 @@ class XGBoostPredictor(BasePredictor):
         logger.info(f"[{self.name}] 开始训练，{len(records)} 期数据")
 
         features_df, labels_df = self._feature_builder.build(records)
+        self._feature_names = list(features_df.columns)
         X = features_df.values
 
         # 训练红球 + 蓝球模型（共 49 个）
@@ -116,13 +128,13 @@ class XGBoostPredictor(BasePredictor):
             blue_ball = sorted_blue[i % len(sorted_blue)][0]
 
             avg_prob = np.mean([red_probs[b] for b in selected_red])
-            confidence = round(float(avg_prob), 3)
+            score = round(float(avg_prob), 3)
 
             predictions.append(
                 Prediction(
                     red_balls=tuple(sorted(selected_red)),
                     blue_ball=blue_ball,
-                    confidence=confidence,
+                    score=score,
                     source=self.name,
                     details={"red_probs": {b: round(red_probs[b], 4) for b in selected_red}},
                 )
@@ -136,6 +148,14 @@ class XGBoostPredictor(BasePredictor):
         data = {
             "red_models": self._red_models,
             "blue_models": self._blue_models,
+            "metadata": {
+                "n_estimators": self._n_estimators,
+                "max_depth": self._max_depth,
+                "learning_rate": self._learning_rate,
+                "random_state": self._random_state,
+                "feature_names": self._feature_names,
+                "feature_builder": self._feature_builder.snapshot(),
+            },
         }
         with open(path, "wb") as f:
             pickle.dump(data, f)
@@ -147,7 +167,15 @@ class XGBoostPredictor(BasePredictor):
             data = pickle.load(f)
         self._red_models = data["red_models"]
         self._blue_models = data["blue_models"]
+        metadata = data.get("metadata", {})
+        self._n_estimators = metadata.get("n_estimators", self._n_estimators)
+        self._max_depth = metadata.get("max_depth", self._max_depth)
+        self._learning_rate = metadata.get("learning_rate", self._learning_rate)
+        self._random_state = metadata.get("random_state", self._random_state)
+        self._feature_names = metadata.get("feature_names", [])
+        feature_builder_snapshot = metadata.get("feature_builder")
+        if feature_builder_snapshot:
+            self._feature_builder = FeatureBuilder.from_snapshot(feature_builder_snapshot)
         self._trained = True
         logger.info(f"[{self.name}] 模型已加载")
-
 

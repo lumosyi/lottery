@@ -95,6 +95,8 @@ class LSTMPredictor(BasePredictor):
         self._model: LSTMNetwork | None = None
         self._device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self._trained = False
+        self._input_size: int | None = None
+        self._output_size: int | None = None
 
     @property
     def name(self) -> str:
@@ -137,6 +139,8 @@ class LSTMPredictor(BasePredictor):
         # 初始化模型
         input_size = X_seq.shape[2]
         output_size = y_seq.shape[1]
+        self._input_size = input_size
+        self._output_size = output_size
         self._model = LSTMNetwork(
             input_size=input_size,
             hidden_size=self._hidden_size,
@@ -229,13 +233,13 @@ class LSTMPredictor(BasePredictor):
             blue_ball = sorted_blue[i % len(sorted_blue)][0]
 
             avg_prob = float(np.mean([red_probs[b] for b in selected_red]))
-            confidence = round(avg_prob, 3)
+            score = round(avg_prob, 3)
 
             predictions.append(
                 Prediction(
                     red_balls=tuple(sorted(selected_red)),
                     blue_ball=blue_ball,
-                    confidence=confidence,
+                    score=score,
                     source=self.name,
                 )
             )
@@ -244,17 +248,57 @@ class LSTMPredictor(BasePredictor):
 
     def save(self, path: Path) -> None:
         """保存模型权重"""
-        if self._model is None:
+        if self._model is None or self._input_size is None or self._output_size is None:
             return
         path.parent.mkdir(parents=True, exist_ok=True)
-        torch.save(self._model.state_dict(), path)
+        torch.save(
+            {
+                "state_dict": self._model.state_dict(),
+                "metadata": {
+                    "seq_len": self._seq_len,
+                    "hidden_size": self._hidden_size,
+                    "num_layers": self._num_layers,
+                    "epochs": self._epochs,
+                    "learning_rate": self._lr,
+                    "batch_size": self._batch_size,
+                    "input_size": self._input_size,
+                    "output_size": self._output_size,
+                    "feature_builder": self._feature_builder.snapshot(),
+                },
+            },
+            path,
+        )
         logger.info(f"[{self.name}] 模型已保存到 {path}")
 
     def load(self, path: Path) -> None:
-        """加载模型权重（需要先知道输入维度）"""
-        if self._model is None:
-            raise RuntimeError("需要先构建模型结构再加载权重")
-        self._model.load_state_dict(torch.load(path, map_location=self._device))
+        """加载模型权重。"""
+        checkpoint = torch.load(path, map_location=self._device)
+        if "state_dict" in checkpoint:
+            metadata = checkpoint.get("metadata", {})
+            self._seq_len = metadata.get("seq_len", self._seq_len)
+            self._hidden_size = metadata.get("hidden_size", self._hidden_size)
+            self._num_layers = metadata.get("num_layers", self._num_layers)
+            self._epochs = metadata.get("epochs", self._epochs)
+            self._lr = metadata.get("learning_rate", self._lr)
+            self._batch_size = metadata.get("batch_size", self._batch_size)
+            self._input_size = metadata.get("input_size")
+            self._output_size = metadata.get("output_size")
+            feature_builder_snapshot = metadata.get("feature_builder")
+            if feature_builder_snapshot:
+                self._feature_builder = FeatureBuilder.from_snapshot(feature_builder_snapshot)
+            if self._input_size is None or self._output_size is None:
+                raise RuntimeError("LSTM 检查点缺少输入/输出维度元数据")
+            self._model = LSTMNetwork(
+                input_size=self._input_size,
+                hidden_size=self._hidden_size,
+                num_layers=self._num_layers,
+                output_size=self._output_size,
+            ).to(self._device)
+            self._model.load_state_dict(checkpoint["state_dict"])
+        else:
+            if self._model is None:
+                raise RuntimeError("旧版检查点缺少元数据，无法自动重建网络结构")
+            self._model.load_state_dict(checkpoint)
         self._trained = True
         logger.info(f"[{self.name}] 模型已加载")
 
@@ -282,5 +326,4 @@ class LSTMPredictor(BasePredictor):
             y_seq.append(y[i])
 
         return np.array(X_seq), np.array(y_seq)
-
 

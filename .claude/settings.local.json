@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__filesystem__list_allowed_directories",
+      "mcp__filesystem__directory_tree",
+      "mcp__sequential-thinking__sequentialthinking"
+    ]
+  }
+}

@@ -1,6 +1,6 @@
-"""加权投票融合策略
+"""加权投票融合策略。
 
-每个号码的得分 = 各预测器对该号码的推荐分数 * 预测器权重 * 置信度
+每个号码的得分 = 各预测器对该号码的推荐分数 * 预测器权重 * 评分。
 取得分最高的 6 个红球和 1 个蓝球。
 """
 
@@ -17,7 +17,7 @@ class WeightedVoting(EnsembleStrategy):
     """加权投票融合
 
     为每个号码计算加权得分:
-    - 号码在某预测组中出现 -> 获得该预测器的权重 * 置信度
+    - 号码在某预测组中出现 -> 获得该预测器的权重 * 评分
     - 按得分排序选取 Top 号码
     """
 
@@ -40,7 +40,7 @@ class WeightedVoting(EnsembleStrategy):
 
         for pred in predictions:
             w = self._weights.get(pred.source, 1.0)
-            score = w * pred.confidence
+            score = w * pred.score
 
             for ball in pred.red_balls:
                 red_scores[ball] += score
@@ -77,16 +77,16 @@ class WeightedVoting(EnsembleStrategy):
 
             blue_ball = sorted_blue[i % len(sorted_blue)][0]
 
-            # 融合置信度: 所选红球的平均加权得分归一化
+            # 融合评分: 所选红球的平均加权得分归一化
             max_score = sorted_red[0][1] if sorted_red else 1.0
             avg_score = sum(red_scores[b] for b in selected_red) / RED_BALL_COUNT
-            confidence = round(min(avg_score / max_score, 0.95) if max_score > 0 else 0.5, 3)
+            final_score = round(min(avg_score / max_score, 0.95) if max_score > 0 else 0.5, 3)
 
             results.append(
                 Prediction(
                     red_balls=tuple(sorted(selected_red)),
                     blue_ball=blue_ball,
-                    confidence=confidence,
+                    score=final_score,
                     source="融合推荐",
                     details={
                         "strategy": "weighted_voting",

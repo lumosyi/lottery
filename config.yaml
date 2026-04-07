@@ -68,3 +68,7 @@ output:
   charts_dir: "output/charts"
   # matplotlib 风格
   chart_style: "seaborn-v0_8"
+
+runtime:
+  # 全局随机种子（CLI 可用 --seed 覆盖）
+  seed: 42

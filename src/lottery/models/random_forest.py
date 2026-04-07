@@ -43,6 +43,7 @@ class RandomForestPredictor(BasePredictor):
         self._red_models: dict[int, RandomForestClassifier] = {}
         self._blue_models: dict[int, RandomForestClassifier] = {}
         self._trained = False
+        self._feature_names: list[str] = []
 
     @property
     def name(self) -> str:
@@ -53,6 +54,7 @@ class RandomForestPredictor(BasePredictor):
         logger.info(f"[{self.name}] 开始训练，{len(records)} 期数据")
 
         features_df, labels_df = self._feature_builder.build(records)
+        self._feature_names = list(features_df.columns)
         X = features_df.values
 
         # 训练红球模型 + 蓝球模型（共 49 个）
@@ -110,15 +112,15 @@ class RandomForestPredictor(BasePredictor):
             sorted_blue = sorted(blue_probs.items(), key=lambda x: x[1], reverse=True)
             blue_ball = sorted_blue[i % len(sorted_blue)][0]
 
-            # 置信度：所选红球的平均概率
+            # 评分：所选红球的平均概率
             avg_prob = np.mean([red_probs[b] for b in selected_red])
-            confidence = round(float(avg_prob), 3)
+            score = round(float(avg_prob), 3)
 
             predictions.append(
                 Prediction(
                     red_balls=tuple(sorted(selected_red)),
                     blue_ball=blue_ball,
-                    confidence=confidence,
+                    score=score,
                     source=self.name,
                     details={"red_probs": {b: round(red_probs[b], 4) for b in selected_red}},
                 )
@@ -132,6 +134,12 @@ class RandomForestPredictor(BasePredictor):
         data = {
             "red_models": self._red_models,
             "blue_models": self._blue_models,
+            "metadata": {
+                "n_estimators": self._n_estimators,
+                "random_state": self._random_state,
+                "feature_names": self._feature_names,
+                "feature_builder": self._feature_builder.snapshot(),
+            },
         }
         with open(path, "wb") as f:
             pickle.dump(data, f)
@@ -143,7 +151,12 @@ class RandomForestPredictor(BasePredictor):
             data = pickle.load(f)
         self._red_models = data["red_models"]
         self._blue_models = data["blue_models"]
+        metadata = data.get("metadata", {})
+        self._n_estimators = metadata.get("n_estimators", self._n_estimators)
+        self._random_state = metadata.get("random_state", self._random_state)
+        self._feature_names = metadata.get("feature_names", [])
+        feature_builder_snapshot = metadata.get("feature_builder")
+        if feature_builder_snapshot:
+            self._feature_builder = FeatureBuilder.from_snapshot(feature_builder_snapshot)
         self._trained = True
         logger.info(f"[{self.name}] 模型已加载")
-
-

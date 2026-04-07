@@ -48,20 +48,20 @@ class Prediction:
     Attributes:
         red_balls: 推荐红球号码（升序元组）
         blue_ball: 推荐蓝球号码
-        confidence: 置信度 0.0~1.0
+        score: 评分 0.0~1.0
         source: 来源模型名称
         details: 附加信息
     """
 
     red_balls: tuple[int, ...]
     blue_ball: int
-    confidence: float
+    score: float
     source: str
     details: dict = field(default_factory=dict)
 
     def __str__(self) -> str:
         red_str = " ".join(f"{r:02d}" for r in self.red_balls)
-        return f"[{self.source}] {red_str} | {self.blue_ball:02d} (置信度: {self.confidence:.2%})"
+        return f"[{self.source}] {red_str} | {self.blue_ball:02d} (评分: {self.score:.2%})"
 
 
 @dataclass(slots=True)

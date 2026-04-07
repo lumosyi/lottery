@@ -96,6 +96,13 @@ class OutputConfig:
 
 
 @dataclass
+class RuntimeConfig:
+    """运行时配置"""
+
+    seed: int | None = 42
+
+
+@dataclass
 class AppConfig:
     """应用全局配置"""
 
@@ -106,6 +113,44 @@ class AppConfig:
     ensemble: EnsembleConfig = field(default_factory=EnsembleConfig)
     filters: FiltersConfig = field(default_factory=FiltersConfig)
     output: OutputConfig = field(default_factory=OutputConfig)
+    runtime: RuntimeConfig = field(default_factory=RuntimeConfig)
+
+
+def _ensure_int(name: str, value: Any, *, minimum: int = 0) -> int:
+    """校验整数配置。"""
+    if not isinstance(value, int):
+        raise ValueError(f"{name} 必须是整数，当前: {value!r}")
+    if value < minimum:
+        raise ValueError(f"{name} 必须 >= {minimum}，当前: {value}")
+    return value
+
+
+def _normalize_window_sizes(value: Any) -> list[int]:
+    """规范化窗口配置，自动去重并升序。"""
+    if not isinstance(value, list) or not value:
+        raise ValueError(f"features.window_sizes 必须是非空整数列表，当前: {value!r}")
+
+    normalized = sorted({_ensure_int("features.window_sizes[]", item, minimum=1) for item in value})
+    return normalized
+
+
+def _ensure_weight(name: str, value: Any) -> float:
+    """校验模型权重。"""
+    if not isinstance(value, (int, float)):
+        raise ValueError(f"{name} 必须是数字，当前: {value!r}")
+    if value < 0:
+        raise ValueError(f"{name} 不能为负数，当前: {value}")
+    return float(value)
+
+
+def _ensure_percentile(name: str, value: Any) -> float:
+    """校验百分位配置。"""
+    if not isinstance(value, (int, float)):
+        raise ValueError(f"{name} 必须是数字，当前: {value!r}")
+    numeric = float(value)
+    if not 50 <= numeric <= 100:
+        raise ValueError(f"{name} 必须在 50~100 之间，当前: {value}")
+    return numeric
 
 
 def _parse_model_item(raw: dict[str, Any]) -> ModelItemConfig:
@@ -113,7 +158,7 @@ def _parse_model_item(raw: dict[str, Any]) -> ModelItemConfig:
     known_keys = {"enabled", "weight"}
     return ModelItemConfig(
         enabled=raw.get("enabled", True),
-        weight=raw.get("weight", 0.25),
+        weight=_ensure_weight("models.*.weight", raw.get("weight", 0.25)),
         params={k: v for k, v in raw.items() if k not in known_keys},
     )
 
@@ -154,17 +199,33 @@ def load_config(config_path: str | Path = "config.yaml") -> AppConfig:
     if "analysis" in raw:
         a = raw["analysis"]
         config.analysis = AnalysisConfig(
-            default_recent=a.get("default_recent", config.analysis.default_recent),
-            hot_window=a.get("hot_window", config.analysis.hot_window),
-            cold_threshold=a.get("cold_threshold", config.analysis.cold_threshold),
+            default_recent=_ensure_int(
+                "analysis.default_recent",
+                a.get("default_recent", config.analysis.default_recent),
+                minimum=1,
+            ),
+            hot_window=_ensure_int(
+                "analysis.hot_window",
+                a.get("hot_window", config.analysis.hot_window),
+                minimum=1,
+            ),
+            cold_threshold=_ensure_int(
+                "analysis.cold_threshold",
+                a.get("cold_threshold", config.analysis.cold_threshold),
+                minimum=0,
+            ),
         )
 
     # 特征配置
     if "features" in raw:
         fe = raw["features"]
         config.features = FeatureConfig(
-            window_sizes=fe.get("window_sizes", config.features.window_sizes),
-            sequence_length=fe.get("sequence_length", config.features.sequence_length),
+            window_sizes=_normalize_window_sizes(fe.get("window_sizes", config.features.window_sizes)),
+            sequence_length=_ensure_int(
+                "features.sequence_length",
+                fe.get("sequence_length", config.features.sequence_length),
+                minimum=2,
+            ),
         )
 
     # 模型配置
@@ -198,11 +259,32 @@ def load_config(config_path: str | Path = "config.yaml") -> AppConfig:
         fi = raw["filters"]
         config.filters = FiltersConfig(
             enabled=fi.get("enabled", config.filters.enabled),
-            max_consecutive=fi.get("max_consecutive", config.filters.max_consecutive),
-            repeat_check_recent=fi.get("repeat_check_recent", config.filters.repeat_check_recent),
-            sum_range_percentile=fi.get("sum_range_percentile", config.filters.sum_range_percentile),
+            max_consecutive=_ensure_int(
+                "filters.max_consecutive",
+                fi.get("max_consecutive", config.filters.max_consecutive),
+                minimum=2,
+            ),
+            repeat_check_recent=_ensure_int(
+                "filters.repeat_check_recent",
+                fi.get("repeat_check_recent", config.filters.repeat_check_recent),
+                minimum=1,
+            ),
+            sum_range_percentile=_ensure_percentile(
+                "filters.sum_range_percentile",
+                fi.get("sum_range_percentile", config.filters.sum_range_percentile),
+            ),
             exclude_extreme_odd_even=fi.get("exclude_extreme_odd_even", config.filters.exclude_extreme_odd_even),
             exclude_single_zone=fi.get("exclude_single_zone", config.filters.exclude_single_zone),
+        )
+
+    # 运行时配置
+    if "runtime" in raw:
+        rt = raw["runtime"]
+        seed = rt.get("seed", config.runtime.seed)
+        if seed is not None:
+            seed = _ensure_int("runtime.seed", seed, minimum=0)
+        config.runtime = RuntimeConfig(
+            seed=seed,
         )
 
     return config
